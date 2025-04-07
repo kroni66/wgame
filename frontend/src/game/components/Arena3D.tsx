@@ -1,37 +1,179 @@
-import React from 'react';
+import React, { Suspense } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei';
 
-export const Arena3D: React.FC = () => {
+const BasicArena = () => {
+  const wallHeight = 3;
+  const wallThickness = 0.5;
+  
+  const positions = [
+    [-8, 0, -8],
+    [8, 0, -8],
+    [-8, 0, 8],
+    [8, 0, 8]
+  ];
+  
   return (
-    <div className="w-full h-[600px] rounded-lg overflow-hidden border-2 border-gray-300 bg-blue-100 relative">
-      {/* Fallback 3D Arena Representation */}
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-4/5 h-4/5 bg-amber-800 rounded-lg shadow-lg relative">
-          {/* Arena Floor */}
-          <div className="absolute inset-0 bg-amber-700 rounded-lg"></div>
-          
-          {/* Arena Walls */}
-          <div className="absolute top-0 left-0 right-0 h-8 bg-amber-900 rounded-t-lg"></div>
-          <div className="absolute bottom-0 left-0 right-0 h-8 bg-amber-900 rounded-b-lg"></div>
-          <div className="absolute top-8 left-0 bottom-8 w-8 bg-amber-900"></div>
-          <div className="absolute top-8 right-0 bottom-8 w-8 bg-amber-900"></div>
-          
-          {/* Arena Pillars */}
-          <div className="absolute top-20 left-20 w-12 h-12 bg-amber-950 rounded-full"></div>
-          <div className="absolute top-20 right-20 w-12 h-12 bg-amber-950 rounded-full"></div>
-          <div className="absolute bottom-20 left-20 w-12 h-12 bg-amber-950 rounded-full"></div>
-          <div className="absolute bottom-20 right-20 w-12 h-12 bg-amber-950 rounded-full"></div>
-          
-          {/* Center Platform */}
-          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-amber-600 rounded-full shadow-inner"></div>
-        </div>
-      </div>
+    <>
+      {/* Floor */}
+      <mesh 
+        position={[0, -0.25, 0]} 
+        receiveShadow
+      >
+        <boxGeometry args={[20, 0.5, 20]} />
+        <meshStandardMaterial color="#8a6d3b" />
+      </mesh>
+      
+      {/* North Wall */}
+      <mesh 
+        position={[0, wallHeight / 2, -10]} 
+        castShadow
+      >
+        <boxGeometry args={[20, wallHeight, wallThickness]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      
+      {/* South Wall */}
+      <mesh 
+        position={[0, wallHeight / 2, 10]} 
+        castShadow
+      >
+        <boxGeometry args={[20, wallHeight, wallThickness]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      
+      {/* East Wall */}
+      <mesh 
+        position={[10, wallHeight / 2, 0]} 
+        castShadow
+      >
+        <boxGeometry args={[wallThickness, wallHeight, 20]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      
+      {/* West Wall */}
+      <mesh 
+        position={[-10, wallHeight / 2, 0]} 
+        castShadow
+      >
+        <boxGeometry args={[wallThickness, wallHeight, 20]} />
+        <meshStandardMaterial color="#5d4037" />
+      </mesh>
+      
+      {/* Pillars */}
+      {positions.map((pos, index) => (
+        <mesh 
+          key={index} 
+          position={[pos[0], wallHeight * 0.75, pos[2]]} 
+          castShadow
+        >
+          <cylinderGeometry args={[0.5, 0.5, wallHeight * 1.5, 8]} />
+          <meshStandardMaterial color="#8d6e63" />
+        </mesh>
+      ))}
+      
+      {/* Center Platform */}
+      <mesh 
+        position={[0, 0.1, 0]} 
+        receiveShadow
+      >
+        <cylinderGeometry args={[3, 3, 0.2, 32]} />
+        <meshStandardMaterial color="#a1887f" />
+      </mesh>
+    </>
+  );
+};
+
+const ArenaModel = () => {
+  const { scene } = useGLTF('/models/arena.glb');
+  
+  const modelScene = scene.clone();
+  
+  modelScene.scale.set(5, 5, 5);
+  modelScene.position.set(0, -1, 0);
+  modelScene.rotation.y = Math.PI / 4;
+  
+  modelScene.traverse((node) => {
+    if (node.type === 'Mesh') {
+      node.castShadow = true;
+      node.receiveShadow = true;
+    }
+  });
+  
+  return <primitive object={modelScene} />;
+};
+
+const LoadingFallback = () => {
+  return (
+    <mesh position={[0, 0, 0]}>
+      <sphereGeometry args={[1, 16, 16]} />
+      <meshStandardMaterial color="#f6ad55" wireframe />
+    </mesh>
+  );
+};
+
+interface ErrorBoundaryProps {
+  fallback: React.ReactNode;
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(_error: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error("Error loading 3D model:", error, errorInfo);
+  }
+
+  render(): React.ReactNode {
+    if (this.state.hasError) {
+      return this.props.fallback;
+    }
+
+    return this.props.children;
+  }
+}
+
+export const Arena3D = () => {
+  return (
+    <div className="w-full h-[600px] rounded-lg overflow-hidden border-2 border-gray-300 relative">
+      <Canvas shadows>
+        <PerspectiveCamera makeDefault position={[0, 5, 10]} />
+        <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+        
+        {/* Ambient light */}
+        <ambientLight intensity={0.5} />
+        
+        {/* Directional light with shadow */}
+        <directionalLight 
+          position={[5, 10, 5]} 
+          intensity={1} 
+          castShadow 
+          shadow-mapSize-width={1024} 
+          shadow-mapSize-height={1024}
+        />
+        
+        {/* Load the model with error handling and fallback */}
+        <ErrorBoundary fallback={<BasicArena />}>
+          <Suspense fallback={<LoadingFallback />}>
+            <ArenaModel />
+          </Suspense>
+        </ErrorBoundary>
+      </Canvas>
       
       {/* Overlay Text */}
       <div className="absolute top-4 left-0 right-0 text-center">
-        <h2 className="text-xl font-bold text-gray-800">3D Arena View</h2>
-        <p className="text-sm text-gray-600">
-          (Using CSS fallback due to Three.js loading issues)
-        </p>
+        <h2 className="text-xl font-bold text-white bg-gray-800 bg-opacity-50 rounded-md mx-auto w-fit px-2">3D Arena View</h2>
       </div>
     </div>
   );
