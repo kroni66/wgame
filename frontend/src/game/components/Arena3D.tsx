@@ -1,6 +1,5 @@
-import React, { Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, PerspectiveCamera, useGLTF } from '@react-three/drei';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 
 const BasicArena = () => {
   const wallHeight = 3;
@@ -84,65 +83,6 @@ const BasicArena = () => {
   );
 };
 
-const ArenaModel = () => {
-  const { scene } = useGLTF('/models/arena.glb');
-  
-  const modelScene = scene.clone();
-  
-  modelScene.scale.set(5, 5, 5);
-  modelScene.position.set(0, -1, 0);
-  modelScene.rotation.y = Math.PI / 4;
-  
-  modelScene.traverse((node) => {
-    if (node.type === 'Mesh') {
-      node.castShadow = true;
-      node.receiveShadow = true;
-    }
-  });
-  
-  return <primitive object={modelScene} />;
-};
-
-const LoadingFallback = () => {
-  return (
-    <mesh position={[0, 0, 0]}>
-      <sphereGeometry args={[1, 16, 16]} />
-      <meshStandardMaterial color="#f6ad55" wireframe />
-    </mesh>
-  );
-};
-
-interface ErrorBoundaryProps {
-  fallback: React.ReactNode;
-  children: React.ReactNode;
-}
-
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(_error: Error): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error("Error loading 3D model:", error, errorInfo);
-  }
-
-  render(): React.ReactNode {
-    if (this.state.hasError) {
-      return this.props.fallback;
-    }
-
-    return this.props.children;
-  }
-}
 
 export const Arena3D = () => {
   return (
@@ -163,12 +103,8 @@ export const Arena3D = () => {
           shadow-mapSize-height={1024}
         />
         
-        {/* Load the model with error handling and fallback */}
-        <ErrorBoundary fallback={<BasicArena />}>
-          <Suspense fallback={<LoadingFallback />}>
-            <ArenaModel />
-          </Suspense>
-        </ErrorBoundary>
+        {/* Use BasicArena directly instead of trying to load the model */}
+        <BasicArena />
       </Canvas>
       
       {/* Overlay Text */}
