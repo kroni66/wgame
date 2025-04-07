@@ -1,6 +1,7 @@
-import React, { Suspense, useState } from 'react';
-import { Canvas } from '@react-three/fiber';
+import React, { Suspense, useRef, useEffect } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import * as THREE from 'three';
 
 const BasicArena = () => {
   const wallHeight = 3;
@@ -80,93 +81,184 @@ const BasicArena = () => {
         <cylinderGeometry args={[3, 3, 0.2, 32]} />
         <meshStandardMaterial color="#a1887f" />
       </mesh>
+      
+      {/* Torches */}
+      {positions.map((pos, index) => (
+        <group key={`torch-${index}`} position={[pos[0], wallHeight * 1.5, pos[2]]}>
+          <mesh castShadow>
+            <cylinderGeometry args={[0.1, 0.1, 0.5, 8]} />
+            <meshStandardMaterial color="#5d4037" />
+          </mesh>
+          <pointLight 
+            position={[0, 0.5, 0]} 
+            color="#ff7700" 
+            intensity={1} 
+            distance={5}
+            castShadow
+          />
+        </group>
+      ))}
+      
+      {/* Additional decorative elements */}
+      <mesh position={[0, 0.5, 0]} castShadow>
+        <torusGeometry args={[1, 0.2, 16, 32]} />
+        <meshStandardMaterial color="#d4af37" metalness={0.8} roughness={0.2} />
+      </mesh>
+      
+      {/* Banners */}
+      {[
+        [9, wallHeight, 0],
+        [-9, wallHeight, 0],
+        [0, wallHeight, 9],
+        [0, wallHeight, -9]
+      ].map((pos, index) => (
+        <mesh 
+          key={`banner-${index}`} 
+          position={[pos[0], pos[1], pos[2]]} 
+          rotation={[0, Math.PI * 0.5 * index, 0]}
+          castShadow
+        >
+          <planeGeometry args={[2, 3]} />
+          <meshStandardMaterial 
+            color={index % 2 === 0 ? "#7b1fa2" : "#1565c0"} 
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+      ))}
     </>
   );
 };
 
 const LoadingSpinner = () => {
+  const mesh = useRef<THREE.Mesh>(null);
+  
+  useFrame(() => {
+    if (mesh.current) {
+      mesh.current.rotation.y += 0.01;
+    }
+  });
+  
   return (
-    <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
+    <mesh ref={mesh} position={[0, 0, 0]}>
       <torusGeometry args={[2, 0.5, 16, 32]} />
       <meshStandardMaterial color="#f6ad55" wireframe />
     </mesh>
   );
 };
 
-interface ErrorBoundaryProps {
-  onError: () => void;
-  children: React.ReactNode;
-}
+const SceneSetup = () => {
+  const { scene } = useThree();
+  
+  useEffect(() => {
+    scene.background = new THREE.Color('#111827');
+    scene.fog = new THREE.Fog('#111827', 15, 50);
+    
+    return () => {
+      scene.background = null;
+      scene.fog = null;
+    };
+  }, [scene]);
+  
+  return null;
+};
 
-interface ErrorBoundaryState {
-  hasError: boolean;
-}
-
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(): ErrorBoundaryState {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error("Error in 3D model:", error, errorInfo);
-    this.props.onError();
-  }
-
-  render(): React.ReactNode {
-    if (this.state.hasError) {
-      return <BasicArena />;
+const TorchFlame = ({ position }: { position: [number, number, number] }) => {
+  const light = useRef<THREE.PointLight>(null);
+  
+  useFrame((state) => {
+    if (light.current) {
+      light.current.intensity = 1.5 + Math.sin(state.clock.elapsedTime * 10) * 0.5;
     }
+  });
+  
+  return (
+    <group position={position}>
+      <pointLight 
+        ref={light}
+        color="#ff7700" 
+        intensity={1.5} 
+        distance={5}
+        castShadow
+      />
+      <mesh>
+        <sphereGeometry args={[0.2, 8, 8]} />
+        <meshBasicMaterial color="#ff7700" />
+      </mesh>
+    </group>
+  );
+};
 
-    return this.props.children;
-  }
-}
+const EnhancedArena = () => {
+  return (
+    <>
+      <BasicArena />
+      
+      {/* Add animated torch flames */}
+      <TorchFlame position={[-8, 4.5, -8]} />
+      <TorchFlame position={[8, 4.5, -8]} />
+      <TorchFlame position={[-8, 4.5, 8]} />
+      <TorchFlame position={[8, 4.5, 8]} />
+      
+      {/* Add central light beam */}
+      <spotLight
+        position={[0, 10, 0]}
+        angle={0.3}
+        penumbra={0.5}
+        intensity={1.5}
+        color="#ffffff"
+        castShadow
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
+      />
+      
+      {/* Add fog effect */}
+      <fog attach="fog" args={['#111827', 10, 50]} />
+    </>
+  );
+};
 
 export const Arena3D: React.FC = () => {
-  const [modelFailed, setModelFailed] = useState(false);
-
-  const handleError = () => {
-    console.error("Failed to load 3D model, using fallback");
-    setModelFailed(true);
-  };
-
   return (
     <div className="w-full h-[600px] rounded-lg overflow-hidden border-2 border-gray-300 relative">
       <Canvas shadows>
+        <SceneSetup />
         <PerspectiveCamera makeDefault position={[0, 5, 10]} />
-        <OrbitControls enablePan={true} enableZoom={true} enableRotate={true} />
+        <OrbitControls 
+          enablePan={true} 
+          enableZoom={true} 
+          enableRotate={true}
+          minDistance={5}
+          maxDistance={20}
+        />
         
         {/* Ambient light */}
-        <ambientLight intensity={0.5} />
+        <ambientLight intensity={0.2} />
         
         {/* Directional light with shadow */}
         <directionalLight 
           position={[5, 10, 5]} 
-          intensity={1} 
+          intensity={0.8} 
           castShadow 
           shadow-mapSize-width={1024} 
           shadow-mapSize-height={1024}
         />
         
-        {/* Use Suspense for async loading of the model */}
+        {/* Use Suspense for async loading */}
         <Suspense fallback={<LoadingSpinner />}>
-          {modelFailed ? (
-            <BasicArena />
-          ) : (
-            <ErrorBoundary onError={handleError}>
-              <BasicArena />
-            </ErrorBoundary>
-          )}
+          <EnhancedArena />
         </Suspense>
       </Canvas>
       
       {/* Overlay Text */}
       <div className="absolute top-4 left-0 right-0 text-center">
         <h2 className="text-xl font-bold text-white bg-gray-800 bg-opacity-50 rounded-md mx-auto w-fit px-2">3D Arena View</h2>
+      </div>
+      
+      {/* Instructions */}
+      <div className="absolute bottom-4 left-0 right-0 text-center">
+        <p className="text-sm text-white bg-gray-800 bg-opacity-50 rounded-md mx-auto w-fit px-2">
+          Use mouse to rotate, zoom, and pan the arena
+        </p>
       </div>
     </div>
   );
