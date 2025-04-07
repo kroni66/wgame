@@ -1,3 +1,4 @@
+import React, { Suspense, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
 
@@ -83,8 +84,56 @@ const BasicArena = () => {
   );
 };
 
+const LoadingSpinner = () => {
+  return (
+    <mesh position={[0, 0, 0]} rotation={[0, 0, 0]}>
+      <torusGeometry args={[2, 0.5, 16, 32]} />
+      <meshStandardMaterial color="#f6ad55" wireframe />
+    </mesh>
+  );
+};
 
-export const Arena3D = () => {
+interface ErrorBoundaryProps {
+  onError: () => void;
+  children: React.ReactNode;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error("Error in 3D model:", error, errorInfo);
+    this.props.onError();
+  }
+
+  render(): React.ReactNode {
+    if (this.state.hasError) {
+      return <BasicArena />;
+    }
+
+    return this.props.children;
+  }
+}
+
+export const Arena3D: React.FC = () => {
+  const [modelFailed, setModelFailed] = useState(false);
+
+  const handleError = () => {
+    console.error("Failed to load 3D model, using fallback");
+    setModelFailed(true);
+  };
+
   return (
     <div className="w-full h-[600px] rounded-lg overflow-hidden border-2 border-gray-300 relative">
       <Canvas shadows>
@@ -103,8 +152,16 @@ export const Arena3D = () => {
           shadow-mapSize-height={1024}
         />
         
-        {/* Use BasicArena directly instead of trying to load the model */}
-        <BasicArena />
+        {/* Use Suspense for async loading of the model */}
+        <Suspense fallback={<LoadingSpinner />}>
+          {modelFailed ? (
+            <BasicArena />
+          ) : (
+            <ErrorBoundary onError={handleError}>
+              <BasicArena />
+            </ErrorBoundary>
+          )}
+        </Suspense>
       </Canvas>
       
       {/* Overlay Text */}
